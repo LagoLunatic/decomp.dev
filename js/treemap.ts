@@ -1,3 +1,37 @@
+let panX = 0.0;
+let panY = 0.0;
+let zoom = 1.0;
+let cachedZoom = 1.0;
+let isDragging = false;
+let lastX = 0.0;
+let lastY = 0.0;
+
+const canvasToWorld = (x: number, y: number) => ({
+  x: (x - panX) / zoom,
+  y: (y - panY) / zoom,
+});
+
+const worldToCanvas = (x: number, y: number) => ({
+  x: x * zoom + panX,
+  y: y * zoom + panY,
+});
+
+const clampPan = (canvas: HTMLCanvasElement) => {
+  const { width, height } = canvas.getBoundingClientRect();
+  if (panX > 0.0) {
+    panX = 0.0;
+  }
+  if (panY > 0.0) {
+    panY = 0.0;
+  }
+  if (panX < width * (1 - zoom)) {
+    panX = width * (1 - zoom);
+  }
+  if (panY < height * (1 - zoom)) {
+    panY = height * (1 - zoom);
+  }
+};
+
 const unitBounds = (unit: Unit, width: number, height: number) => {
   return {
     x: unit.x * width,
@@ -63,7 +97,10 @@ const drawTooltip = (
   ctx.font = `${fontWeight} ${fontSize} ${fontFamily}`;
   ctx.textBaseline = 'middle';
 
-  const { x, y, w, h } = unitBounds(unit, width, height);
+  const { x: wx, y: wy, w: ww, h: wh } = unitBounds(unit, width, height);
+  const { x, y } = worldToCanvas(wx, wy);
+  const w = ww * zoom;
+  const h = wh * zoom;
   let percent = unit.fuzzy_match_percent;
   if (percent > 99.99 && percent < 100.0) {
     percent = 99.99;
@@ -79,16 +116,8 @@ const drawTooltip = (
   let bx = x + (w - bw) / 2;
   let by = y - bh - MARGIN;
   let ay = y;
-  if (isTouch) {
-    bx = (width - bw) / 2;
-    if (y + h / 2 < height / 2) {
-      // Draw at the bottom
-      by = height - bh - MARGIN;
-    } else {
-      // Draw at the top
-      by = MARGIN;
-    }
-  } else {
+  let drawArrow = true;
+  if (!isTouch) {
     if (bx + bw > width) {
       bx = width - bw;
     }
@@ -106,10 +135,21 @@ const drawTooltip = (
       ay = y;
     }
   }
+  if (isTouch || bx < 0 || bx + bw > width || by < 0 || by + bh > height) {
+    drawArrow = false;
+    bx = (width - bw) / 2;
+    if (y + h / 2 < height / 2) {
+      // Draw at the bottom
+      by = height - bh - MARGIN;
+    } else {
+      // Draw at the top
+      by = MARGIN;
+    }
+  }
   ctx.fillStyle = tooltipBackground;
   ctx.beginPath();
   ctx.roundRect(bx, by, bw, bh, BORDER_RADIUS);
-  if (!isTouch) {
+  if (drawArrow) {
     // Arrow
     const ax = x + w / 2;
     if (ay < by) {
@@ -130,10 +170,10 @@ const drawTooltip = (
 };
 
 let hovered: Unit | null = null;
+let forceRedraw = false;
 let dirty = false;
 let isTouch = false;
 let cachedCanvas: HTMLCanvasElement | null = null;
-let unitsDirty = false;
 
 const setup = (
   ctx: CanvasRenderingContext2D,
@@ -147,7 +187,6 @@ const setup = (
   // This is so that transparency doesn't make the canvas look bad in light mode.
   ctx.fillStyle = '#181c25';
   ctx.fillRect(0, 0, width, height);
-  ctx.lineWidth = 1;
   ctx.strokeStyle = '#000';
 };
 
@@ -202,8 +241,8 @@ const draw = (canvas: HTMLCanvasElement, units: Unit[]) => {
   const renderWidth = Math.round(width * ratio);
   const renderHeight = Math.round(height * ratio);
   if (
+    !forceRedraw &&
     !dirty &&
-    !unitsDirty &&
     canvas.width === renderWidth &&
     canvas.height === renderHeight
   ) {
@@ -222,11 +261,11 @@ const draw = (canvas: HTMLCanvasElement, units: Unit[]) => {
   }
 
   if (
-    unitsDirty ||
+    forceRedraw ||
     cachedCanvas.width !== renderWidth ||
     cachedCanvas.height !== renderHeight
   ) {
-    unitsDirty = false;
+    forceRedraw = false;
     cachedCanvas.width = renderWidth;
     cachedCanvas.height = renderHeight;
     const cachedCtx = cachedCanvas.getContext('2d');
@@ -234,6 +273,9 @@ const draw = (canvas: HTMLCanvasElement, units: Unit[]) => {
       return;
     }
     setup(cachedCtx, ratio, width, height);
+    cachedCtx.translate(panX, panY);
+    cachedCtx.scale(zoom, zoom);
+    cachedCtx.lineWidth = 1 / zoom;
     drawUnits(cachedCtx, units, width, height);
   }
 
@@ -244,12 +286,19 @@ const draw = (canvas: HTMLCanvasElement, units: Unit[]) => {
   // Use 1:1 scale for rendering cached canvas
   setup(ctx, 1, renderWidth, renderHeight);
   ctx.drawImage(cachedCanvas, 0, 0);
-  ctx.scale(ratio, ratio); // Restore device scale
   if (hovered) {
     const { x, y, w, h } = unitBounds(hovered, width, height);
-    ctx.lineWidth = 2;
+
+    ctx.lineWidth = 2 / zoom;
     ctx.strokeStyle = '#fff';
+    ctx.scale(ratio, ratio); // Restore device scale
+
+    ctx.save();
+    ctx.translate(panX, panY);
+    ctx.scale(zoom, zoom);
     ctx.strokeRect(x, y, w, h);
+    ctx.restore();
+
     drawTooltip(ctx, hovered, width, height);
   }
 };
@@ -261,8 +310,7 @@ const findUnit = (
   clientY: number,
 ): Unit | null => {
   const { width, height, left, top } = canvas.getBoundingClientRect();
-  const mx = clientX - left;
-  const my = clientY - top;
+  const { x: mx, y: my } = canvasToWorld(clientX - left, clientY - top);
   let nearOverlapUnit: Unit | null = null;
   const epsilon = 3;
   for (const unit of units) {
@@ -320,6 +368,7 @@ const drawTreemap = (id: string, clickable: boolean, units: Unit[]) => {
     queueDraw();
   };
   const handleLeave = () => {
+    isDragging = false;
     if (!hovered) {
       return;
     }
@@ -330,7 +379,6 @@ const drawTreemap = (id: string, clickable: boolean, units: Unit[]) => {
     dirty = true;
     queueDraw();
   };
-
   const updateFilter = (filter: string) => {
     // Separate multiple different filter terms with spaces.
     const terms = filter.toLowerCase().split(/\s+/);
@@ -339,7 +387,7 @@ const drawTreemap = (id: string, clickable: boolean, units: Unit[]) => {
         checkFilterTermMatches(term, unit),
       );
     }
-    unitsDirty = true;
+    forceRedraw = true;
     queueDraw();
   };
   const handleFilter = (evt: Event) => {
@@ -358,9 +406,34 @@ const drawTreemap = (id: string, clickable: boolean, units: Unit[]) => {
     }
     window.history.replaceState({}, '', url);
   };
-
+  const contextmenuHandler = (e: MouseEvent) => {
+    e.preventDefault();
+    window.removeEventListener('contextmenu', contextmenuHandler);
+  };
+  canvas.addEventListener('mousedown', (e) => {
+    if (e.button === 2) {
+      isDragging = true;
+      lastX = e.clientX;
+      lastY = e.clientY;
+      window.addEventListener('contextmenu', contextmenuHandler);
+    }
+  });
+  canvas.addEventListener('mouseup', (e) => {
+    if (e.button === 2) {
+      isDragging = false;
+    }
+  });
   canvas.addEventListener('mousemove', (e) => {
     isTouch = false;
+    if (isDragging) {
+      panX += e.clientX - lastX;
+      panY += e.clientY - lastY;
+      clampPan(canvas);
+      lastX = e.clientX;
+      lastY = e.clientY;
+      forceRedraw = true;
+      queueDraw();
+    }
     handleHover(e);
   });
   canvas.addEventListener('mouseleave', handleLeave);
@@ -378,6 +451,24 @@ const drawTreemap = (id: string, clickable: boolean, units: Unit[]) => {
     url.searchParams.set('unit', unit.name);
     url.searchParams.delete('filter');
     window.location.href = url.toString();
+  });
+  canvas.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const { left, top } = canvas.getBoundingClientRect();
+    const oldPos = canvasToWorld(e.clientX - left, e.clientY - top);
+    zoom += zoom * Math.sign(e.deltaY) * -0.2;
+    if (zoom < 1.0) {
+      zoom = 1.0;
+    }
+    if (zoom > 50.0) {
+      zoom = 50.0;
+    }
+    const newPos = canvasToWorld(e.clientX - left, e.clientY - top);
+    panX += (newPos.x - oldPos.x) * zoom;
+    panY += (newPos.y - oldPos.y) * zoom;
+    clampPan(canvas);
+    forceRedraw = true;
+    queueDraw();
   });
   const filterInput = document.querySelector('input[name="filter"]');
   if (filterInput && filterInput instanceof HTMLInputElement) {
