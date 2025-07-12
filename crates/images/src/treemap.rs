@@ -1,17 +1,93 @@
 use palette::{FromColor, Hsl, Mix, Srgb};
+use std::collections::BTreeMap;
 use streemap::Rect;
 
-pub fn layout_units<T, S, R>(items: &mut [T], aspect: f32, size_fn: S, mut set_rect_fn: R)
+struct LayoutItem {
+    size: f32,
+    rect: Rect<f32>,
+    children: Option<BTreeMap<String, LayoutItem>>,
+    index: Option<usize>,
+}
+
+impl Default for LayoutItem {
+    fn default() -> Self {
+        LayoutItem {
+            size: 0.,
+            rect: Rect { x: 0., y: 0., w: 0., h: 0. },
+            children: None,
+            index: None,
+        }
+    }
+}
+
+fn generate_tree<I, S, N>(items: &mut [I], size_fn: S, name_fn: N) -> LayoutItem
 where
+    S: Fn(&I) -> f32,
+    N: Fn(&I) -> &str,
+{
+    let mut root = LayoutItem::default();
+
+    for (index, item) in items.iter().enumerate() {
+        let name = name_fn(item);
+        let size = size_fn(item);
+        let mut path = name.split('/');
+        // path.next(); // merge RELs
+
+        let mut cur = &mut root;
+        while let Some(part) = path.next() {
+            cur.size += size;
+            cur = cur.children.get_or_insert_default().entry(part.to_string()).or_default();
+        }
+        cur.size = size;
+        cur.index = Some(index);
+    }
+
+    root
+}
+
+fn layout_tree<I, R>(items: &mut [I], root: &mut LayoutItem, set_rect_fn: &mut R)
+where
+    R: FnMut(&mut I, Rect<f32>),
+{
+    if let Some(children) = root.children.as_mut() {
+        let mut v = children.values_mut().collect::<Vec<_>>();
+        v.sort_by(|a, b| b.size.total_cmp(&a.size));
+        let margin_w = root.rect.w * 0.01;
+        let margin_h = root.rect.h * 0.01;
+        let inlaid_rect = Rect {
+            x: root.rect.x + margin_w,
+            y: root.rect.y + margin_h,
+            w: root.rect.w - 2. * margin_w,
+            h: root.rect.h - 2. * margin_h,
+        };
+        streemap::squarify(inlaid_rect, &mut v, |i| i.size, |i, r| i.rect = r);
+        for mut child in v {
+            layout_tree(items, &mut child, set_rect_fn);
+        }
+    }
+    if let Some(index) = root.index {
+        set_rect_fn(&mut items[index], root.rect);
+    }
+}
+
+pub fn layout_units<T, S, N, R>(
+    items: &mut [T],
+    aspect: f32,
+    size_fn: S,
+    name_fn: N,
+    mut set_rect_fn: R,
+) where
     S: Fn(&T) -> f32,
+    N: Fn(&T) -> &str,
     R: FnMut(&mut T, Rect<f32>),
 {
-    let rect = if aspect > 1.0 {
+    let mut tree = generate_tree(items, size_fn, name_fn);
+    tree.rect = if aspect > 1.0 {
         Rect::from_size(1.0, 1.0 / aspect)
     } else {
         Rect::from_size(aspect, 1.0)
     };
-    streemap::binary(rect, items, size_fn, |item, mut rect| {
+    layout_tree(items, &mut tree, &mut |item, mut rect| {
         if aspect > 1.0 {
             rect.y *= aspect;
             rect.h *= aspect;

@@ -572,6 +572,7 @@ fn apply_scope<'a>(
         &mut units,
         w as f32 / h as f32,
         |i| i.total_code as f32,
+        |i| i.name,
         |i, r| {
             i.x = r.x;
             i.y = r.y;
