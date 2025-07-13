@@ -325,7 +325,7 @@ const findUnit = (
     ) {
       const dx = Math.max(0, x - mx, mx - (x + w));
       const dy = Math.max(0, y - my, my - (y + h));
-      const distance = dx*dx + dy*dy;
+      const distance = dx * dx + dy * dy;
       if (nearOverlapDistance === null || distance < nearOverlapDistance) {
         nearOverlapUnit = unit;
         nearOverlapDistance = distance;

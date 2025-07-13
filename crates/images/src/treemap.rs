@@ -1,6 +1,6 @@
+use std::{cmp::Ordering, collections::BTreeMap};
+
 use palette::{FromColor, Hsl, Mix, Srgb};
-use std::cmp::Ordering;
-use std::collections::BTreeMap;
 use streemap::Rect;
 
 struct LayoutItem {
@@ -49,30 +49,26 @@ where
 fn inlay_rect(r: Rect<f32>, margin: f32) -> Rect<f32> {
     let margin_w = r.w * margin;
     let margin_h = r.h * margin;
-    Rect {
-        x: r.x + margin_w,
-        y: r.y + margin_h,
-        w: r.w - margin_w * 2.0,
-        h: r.h - margin_h * 2.0,
-    }
+    Rect { x: r.x + margin_w, y: r.y + margin_h, w: r.w - margin_w * 2.0, h: r.h - margin_h * 2.0 }
 }
 
 fn layout_tree<I, R>(items: &mut [I], root: &mut LayoutItem, set_rect_fn: &mut R)
-where
-    R: FnMut(&mut I, Rect<f32>),
-{
+where R: FnMut(&mut I, Rect<f32>) {
     if let Some(children) = root.children.as_mut() {
         let mut v = children.values_mut().collect::<Vec<_>>();
-        v.sort_by(|a, b|
-		if let Some(ai) = a.index && let Some(bi) = b.index {
-			ai.cmp(&bi)
-		} else if a.children.is_some() && b.children.is_some() {
-			b.size.total_cmp(&a.size)
-		} else if a.index.is_some() {
-			Ordering::Greater
-		} else {
-			Ordering::Less
-		});
+        v.sort_by(|a, b| {
+            if let Some(ai) = a.index
+                && let Some(bi) = b.index
+            {
+                ai.cmp(&bi)
+            } else if a.children.is_some() && b.children.is_some() {
+                b.size.total_cmp(&a.size)
+            } else if a.index.is_some() {
+                Ordering::Greater
+            } else {
+                Ordering::Less
+            }
+        });
         streemap::binary(inlay_rect(root.rect, 0.02), &mut v, |i| i.size, |i, r| i.rect = r);
         for mut child in v {
             layout_tree(items, &mut child, set_rect_fn);
@@ -117,9 +113,7 @@ pub fn hsl(h: u16, s: u8, l: u8) -> Srgb {
     Srgb::from_color(hsl)
 }
 
-pub fn color_mix(c1: Srgb, c2: Srgb, percent: f32) -> Srgb {
-    c1.mix(c2, percent)
-}
+pub fn color_mix(c1: Srgb, c2: Srgb, percent: f32) -> Srgb { c1.mix(c2, percent) }
 
 pub fn unit_color(fuzzy_match_percent: f32) -> String {
     html_color(if fuzzy_match_percent == 100.0 {
