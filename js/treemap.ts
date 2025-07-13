@@ -305,7 +305,8 @@ const findUnit = (
   const { width, height, left, top } = canvas.getBoundingClientRect();
   const { x: mx, y: my } = canvasToWorld(clientX - left, clientY - top);
   let nearOverlapUnit: Unit | null = null;
-  const epsilon = 3;
+  let nearOverlapDistance: number | null = null;
+  const epsilon = 5 / zoom;
   for (const unit of units) {
     if (unit.filtered) {
       continue;
@@ -317,13 +318,18 @@ const findUnit = (
     // If the unit doesn't exactly overlap the cursor, check if it's within a few pixels of overlapping.
     // This is needed to make it possible to hover and click units that have subpixel widths/heights.
     if (
-      !nearOverlapUnit &&
       mx >= x - epsilon &&
       mx <= x + w + epsilon &&
       my >= y - epsilon &&
       my <= y + h + epsilon
     ) {
-      nearOverlapUnit = unit;
+      const dx = Math.max(0, x - mx, mx - (x + w));
+      const dy = Math.max(0, y - my, my - (y + h));
+      const distance = dx*dx + dy*dy;
+      if (nearOverlapDistance === null || distance < nearOverlapDistance) {
+        nearOverlapUnit = unit;
+        nearOverlapDistance = distance;
+      }
     }
   }
   if (nearOverlapUnit) {
