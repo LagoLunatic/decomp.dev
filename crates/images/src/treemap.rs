@@ -46,6 +46,17 @@ where
     root
 }
 
+fn inlay_rect(r: Rect<f32>, margin: f32) -> Rect<f32> {
+    let margin_w = r.w * margin;
+    let margin_h = r.h * margin;
+    Rect {
+        x: r.x + margin_w,
+        y: r.y + margin_h,
+        w: r.w - margin_w * 2.0,
+        h: r.h - margin_h * 2.0,
+    }
+}
+
 fn layout_tree<I, R>(items: &mut [I], root: &mut LayoutItem, set_rect_fn: &mut R)
 where
     R: FnMut(&mut I, Rect<f32>),
@@ -62,21 +73,13 @@ where
 		} else {
 			Ordering::Less
 		});
-        let margin_w = root.rect.w * 0.01;
-        let margin_h = root.rect.h * 0.01;
-        let inlaid_rect = Rect {
-            x: root.rect.x + margin_w,
-            y: root.rect.y + margin_h,
-            w: root.rect.w - 2. * margin_w,
-            h: root.rect.h - 2. * margin_h,
-        };
-        streemap::binary(inlaid_rect, &mut v, |i| i.size, |i, r| i.rect = r);
+        streemap::binary(inlay_rect(root.rect, 0.02), &mut v, |i| i.size, |i, r| i.rect = r);
         for mut child in v {
             layout_tree(items, &mut child, set_rect_fn);
         }
     }
     if let Some(index) = root.index {
-        set_rect_fn(&mut items[index], root.rect);
+        set_rect_fn(&mut items[index], inlay_rect(root.rect, 0.005));
     }
 }
 
