@@ -504,6 +504,11 @@ async fn render_manage_project(
                                     " (requires GitHub App installation)"
                                 }
                             }
+                            label {
+                                input name="merge_root_folders" type="checkbox" role="switch"
+                                    checked[project_info.project.merge_root_folders];
+                                "Treemap ignores root folder"
+                            }
                             hr;
                             label {
                                 "Hero image "
@@ -563,6 +568,7 @@ pub struct ProjectForm {
     pub header_image: Option<Bytes>,
     pub clear_header_image: Option<String>,
     pub enabled: Option<String>,
+    pub merge_root_folders: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -628,6 +634,7 @@ pub async fn manage_project_save(
         },
         header_image_id,
         enabled: form.enabled.is_some_and(|v| v == "on"),
+        merge_root_folders: form.merge_root_folders.is_some_and(|v| v == "on"),
     };
     state.db.update_project(&project).await?;
     let redirect_url = format!("/{}/{}", params.owner, params.repo);

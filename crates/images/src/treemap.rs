@@ -21,7 +21,12 @@ impl Default for LayoutItem {
     }
 }
 
-fn generate_tree<I, S, N>(items: &mut [I], size_fn: S, name_fn: N) -> LayoutItem
+fn generate_tree<I, S, N>(
+    items: &mut [I],
+    merge_root_folders: bool,
+    size_fn: S,
+    name_fn: N,
+) -> LayoutItem
 where
     S: Fn(&I) -> f32,
     N: Fn(&I) -> &str,
@@ -32,7 +37,9 @@ where
         let name = name_fn(item);
         let size = size_fn(item);
         let mut path = name.split('/');
-        // path.next(); // merge RELs
+        if merge_root_folders && path.clone().count() > 1 {
+            path.next();
+        }
 
         let mut cur = &mut root;
         while let Some(part) = path.next() {
@@ -82,6 +89,7 @@ where R: FnMut(&mut I, Rect<f32>) {
 pub fn layout_units<T, S, N, R>(
     items: &mut [T],
     aspect: f32,
+    merge_root_folders: bool,
     size_fn: S,
     name_fn: N,
     mut set_rect_fn: R,
@@ -90,7 +98,7 @@ pub fn layout_units<T, S, N, R>(
     N: Fn(&T) -> &str,
     R: FnMut(&mut T, Rect<f32>),
 {
-    let mut tree = generate_tree(items, size_fn, name_fn);
+    let mut tree = generate_tree(items, merge_root_folders, size_fn, name_fn);
     tree.rect = if aspect > 1.0 {
         Rect::from_size(1.0, 1.0 / aspect)
     } else {

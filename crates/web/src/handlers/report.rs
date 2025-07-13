@@ -514,6 +514,7 @@ fn apply_scope<'a>(
         current_unit = Some(unit.as_ref());
     }
     let (w, h) = query.size();
+    let mut merge_root_folders = false;
     let mut units = if let Some(unit) = current_unit {
         unit.functions
             .iter()
@@ -538,6 +539,7 @@ fn apply_scope<'a>(
             })
             .collect::<Vec<_>>()
     } else {
+        merge_root_folders = project_info.project.merge_root_folders;
         report
             .report
             .units
@@ -571,6 +573,7 @@ fn apply_scope<'a>(
     layout_units(
         &mut units,
         w as f32 / h as f32,
+        merge_root_folders,
         |i| i.total_code as f32,
         |i| i.name,
         |i, r| {

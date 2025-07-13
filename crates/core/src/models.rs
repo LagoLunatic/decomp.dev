@@ -21,6 +21,7 @@ pub struct Project {
     pub enable_pr_comments: bool,
     pub header_image_id: Option<ImageId>,
     pub enabled: bool,
+    pub merge_root_folders: bool,
 }
 
 impl Default for Project {
@@ -38,6 +39,7 @@ impl Default for Project {
             enable_pr_comments: true,
             header_image_id: None,
             enabled: true,
+            merge_root_folders: false,
         }
     }
 }

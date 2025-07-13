@@ -89,8 +89,8 @@ impl Database {
         let header_image_id = project.header_image_id.as_ref().map(|b| b.as_slice());
         sqlx::query!(
             r#"
-            INSERT INTO projects (id, owner, repo, name, short_name, default_category, default_version, platform, workflow_id, enable_pr_comments, header_image_id, enabled, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            INSERT INTO projects (id, owner, repo, name, short_name, default_category, default_version, platform, workflow_id, enable_pr_comments, header_image_id, enabled, merge_root_folders, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
             ON CONFLICT (id) DO NOTHING
             "#,
             project_id,
@@ -105,6 +105,7 @@ impl Database {
             project.enable_pr_comments,
             header_image_id,
             project.enabled,
+            project.merge_root_folders,
         )
             .execute(&mut *tx)
             .await?;
@@ -364,7 +365,7 @@ impl Database {
         let mut conn = self.pool.acquire().await?;
         let project = match sqlx::query!(
             r#"
-            SELECT id AS "id!", owner, repo, name, short_name, default_category, default_version, platform, workflow_id, enable_pr_comments, header_image_id, enabled
+            SELECT id AS "id!", owner, repo, name, short_name, default_category, default_version, platform, workflow_id, enable_pr_comments, header_image_id, enabled, merge_root_folders
             FROM projects
             WHERE owner = ? COLLATE NOCASE AND repo = ? COLLATE NOCASE
             "#,
@@ -387,6 +388,7 @@ impl Database {
                 enable_pr_comments: row.enable_pr_comments,
                 header_image_id: row.header_image_id.and_then(|b| b.try_into().ok()),
                 enabled: row.enabled,
+                merge_root_folders: row.merge_root_folders,
             },
             None => return Ok(None),
         };
@@ -402,7 +404,7 @@ impl Database {
         let project_id_db = project_id as i64;
         let project = match sqlx::query!(
             r#"
-            SELECT owner, repo, name, short_name, default_category, default_version, platform, workflow_id, enable_pr_comments, header_image_id, enabled
+            SELECT owner, repo, name, short_name, default_category, default_version, platform, workflow_id, enable_pr_comments, header_image_id, enabled, merge_root_folders
             FROM projects
             WHERE id = ?
             "#,
@@ -424,6 +426,7 @@ impl Database {
                 enable_pr_comments: row.enable_pr_comments,
                 header_image_id: row.header_image_id.and_then(|b| b.try_into().ok()),
                 enabled: row.enabled,
+                merge_root_folders: row.merge_root_folders,
             },
             None => return Ok(None),
         };
@@ -559,6 +562,7 @@ impl Database {
                 enable_pr_comments AS "enable_pr_comments!",
                 header_image_id,
                 enabled AS "enabled!",
+                merge_root_folders AS "merge_root_folders!",
                 git_commit,
                 git_commit_message,
                 MAX(timestamp) AS "timestamp: time::OffsetDateTime",
@@ -593,6 +597,7 @@ impl Database {
                 enable_pr_comments: row.enable_pr_comments,
                 header_image_id: row.header_image_id.and_then(|b| b.try_into().ok()),
                 enabled: row.enabled,
+                merge_root_folders: row.merge_root_folders,
             },
             commit: match (row.git_commit, row.timestamp) {
                 (Some(sha), Some(timestamp)) => Some(Commit {
@@ -974,7 +979,7 @@ impl Database {
         sqlx::query!(
             r#"
             UPDATE projects
-            SET owner = ?, repo = ?, name = ?, short_name = ?, default_category = ?, default_version = ?, platform = ?, workflow_id = ?, enable_pr_comments = ?, header_image_id = ?, enabled = ?, updated_at = CURRENT_TIMESTAMP
+            SET owner = ?, repo = ?, name = ?, short_name = ?, default_category = ?, default_version = ?, platform = ?, workflow_id = ?, enable_pr_comments = ?, header_image_id = ?, enabled = ?, merge_root_folders = ?, updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
             "#,
             project.owner,
@@ -988,6 +993,7 @@ impl Database {
             project.enable_pr_comments,
             header_image_id,
             project.enabled,
+            project.merge_root_folders,
             project_id,
         )
         .execute(&mut *conn)
@@ -1001,8 +1007,8 @@ impl Database {
         let header_image_id = project.header_image_id.as_ref().map(|b| b.as_slice());
         sqlx::query!(
             r#"
-            INSERT INTO projects (id, owner, repo, name, short_name, default_category, default_version, platform, workflow_id, enable_pr_comments, header_image_id, enabled, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            INSERT INTO projects (id, owner, repo, name, short_name, default_category, default_version, platform, workflow_id, enable_pr_comments, header_image_id, enabled, merge_root_folders, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
             "#,
             project_id,
             project.owner,
@@ -1016,6 +1022,7 @@ impl Database {
             project.enable_pr_comments,
             header_image_id,
             project.enabled,
+            project.merge_root_folders,
         )
         .execute(&mut *conn)
         .await?;

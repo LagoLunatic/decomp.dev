@@ -1,0 +1,1 @@
+ALTER TABLE projects ADD COLUMN merge_root_folders BOOLEAN NOT NULL DEFAULT FALSE;
