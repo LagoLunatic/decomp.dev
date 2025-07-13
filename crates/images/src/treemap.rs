@@ -6,7 +6,7 @@ use streemap::Rect;
 struct LayoutItem {
     size: f32,
     rect: Rect<f32>,
-    children: Option<BTreeMap<String, LayoutItem>>,
+    children: Option<BTreeMap<(String, Option<usize>), LayoutItem>>,
     index: Option<usize>,
 }
 
@@ -36,15 +36,26 @@ where
     for (index, item) in items.iter().enumerate() {
         let name = name_fn(item);
         let size = size_fn(item);
-        let mut path = name.split('/');
-        if merge_root_folders && path.clone().count() > 1 {
-            path.next();
-        }
+        let mut path = name.split('/').peekable();
 
         let mut cur = &mut root;
+        let mut at_root = true;
         while let Some(part) = path.next() {
+            let mut discriminator = None;
+            if path.peek().is_none() {
+                // Distinguish files from folders, and files from other files with the same name.
+                discriminator = Some(index);
+            } else if at_root && merge_root_folders {
+                at_root = false;
+                continue;
+            }
             cur.size += size;
-            cur = cur.children.get_or_insert_default().entry(part.to_string()).or_default();
+            cur = cur
+                .children
+                .get_or_insert_default()
+                .entry((part.to_string(), discriminator))
+                .or_default();
+            at_root = false;
         }
         cur.size = size;
         cur.index = Some(index);
