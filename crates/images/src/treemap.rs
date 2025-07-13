@@ -1,4 +1,5 @@
 use palette::{FromColor, Hsl, Mix, Srgb};
+use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use streemap::Rect;
 
@@ -51,7 +52,16 @@ where
 {
     if let Some(children) = root.children.as_mut() {
         let mut v = children.values_mut().collect::<Vec<_>>();
-        v.sort_by(|a, b| b.size.total_cmp(&a.size));
+        v.sort_by(|a, b|
+		if let Some(ai) = a.index && let Some(bi) = b.index {
+			ai.cmp(&bi)
+		} else if a.children.is_some() && b.children.is_some() {
+			b.size.total_cmp(&a.size)
+		} else if a.index.is_some() {
+			Ordering::Greater
+		} else {
+			Ordering::Less
+		});
         let margin_w = root.rect.w * 0.01;
         let margin_h = root.rect.h * 0.01;
         let inlaid_rect = Rect {
@@ -60,7 +70,7 @@ where
             w: root.rect.w - 2. * margin_w,
             h: root.rect.h - 2. * margin_h,
         };
-        streemap::squarify(inlaid_rect, &mut v, |i| i.size, |i, r| i.rect = r);
+        streemap::binary(inlaid_rect, &mut v, |i| i.size, |i, r| i.rect = r);
         for mut child in v {
             layout_tree(items, &mut child, set_rect_fn);
         }
