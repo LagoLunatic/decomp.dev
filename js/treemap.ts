@@ -352,7 +352,7 @@ const drawTreemap = (id: string, clickable: boolean, units: Unit[]) => {
     updateFilter(evt.currentTarget.value);
     const url = new URL(window.location.href);
     if (evt.currentTarget.value) {
-      url.searchParams.set('filter', evt.currentTarget.value);
+      url.searchParams.set('filter', encodeURIComponent(evt.currentTarget.value));
     } else {
       url.searchParams.delete('filter');
     }
@@ -471,7 +471,7 @@ window.drawTreemap = drawTreemap;
   if (filterFromUrl) {
     const filterInput = document.querySelector('input[name="filter"]');
     if (filterInput && filterInput instanceof HTMLInputElement) {
-      filterInput.value = filterFromUrl;
+      filterInput.value = decodeURIComponent(filterFromUrl);
       filterInput.scrollIntoView();
     }
   }
